@@ -1,47 +1,39 @@
 import asyncio
-import random
-import json
 from playwright.async_api import async_playwright
 
-async def run():
+async def main():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)  # show browser
-        page = await browser.new_page()
+        # Launch browser in headless mode
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context()
+        page = await context.new_page()
 
-        # --- Step 1: Intercept and log payloads ---
-        async def log_request(request):
-            if request.method == "POST" and "trigger" in request.url:
-                try:
-                    payload = request.post_data
-                    print("\n🔴 Full Payload Captured:\n", json.dumps(json.loads(payload), indent=2))
-                except Exception as e:
-                    print("⚠️ Error reading payload:", e)
+        # Intercept network requests
+        async def capture_request(route, request):
+            if "chat" in request.url and request.method == "POST":
+                print("---- Captured Payload ----")
+                print("URL:", request.url)
+                print("Headers:", request.headers)
+                print("Post Data:", request.post_data())
+                print("-------------------------")
+            await route.continue_()
 
-        page.on("request", log_request)
+        await context.route("**/*", capture_request)
 
-        # --- Step 2: Go to your site ---
-        await page.goto("https://workik.com/ai-code-writer", timeout=60000)
+        # Go to the website
+        await page.goto("https://chatgpt.ch/")  # replace with real site
+
+        # Select GPT-5 mini (instead of default GPT-4)
+        await page.click("text=GPT-4")  # open dropdown
+        await page.click("text=GPT-5 mini")  # select GPT-5 mini
+
+        # Type a message
+        await page.fill("textarea", "Hello from headless script!")
+        await page.press("textarea", "Enter")
+
+        # Wait for some response
         await page.wait_for_timeout(5000)
-
-        # --- Step 3: Open dropdown and select GPT 5 Mini (once) ---
-        await page.click("div:has-text('GPT 4.1 Mini')")
-        await page.click("text=GPT 5 Mini")
-        await page.wait_for_timeout(1500)
-
-        # --- Step 4: Loop sending random messages ---
-        messages = ["Hi", "Hello GPT 5 Mini!", "Give me sample code", "Random test", "Ping!", "How are you?"]
-
-        for i in range(5):  # send 5 requests, change number if needed
-            msg = random.choice(messages)
-
-            await page.fill("textarea", msg)
-            await page.press("textarea", "Enter")
-
-            print(f"\n✅ Sent message {i+1}: {msg}")
-
-            # wait for backend request + reply
-            await page.wait_for_timeout(6000)
 
         await browser.close()
 
-asyncio.run(run())
+asyncio.run(main())
