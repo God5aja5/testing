@@ -14,7 +14,6 @@ async def main():
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
 
-        # --- Capture all network requests ---
         captured_payloads = []
 
         async def capture_request(route, request):
@@ -22,7 +21,7 @@ async def main():
                 if request.method == "POST":
                     data = request.post_data
                     if data:
-                        print(f"[+] Captured request payload: {data}")
+                        print(f"[+] Captured request payload: {data[:200]}...")
                         captured_payloads.append(data)
             except Exception as e:
                 print(f"[!] Error capturing payload: {e}")
@@ -34,9 +33,14 @@ async def main():
         await page.goto("https://workik.com/ai-code-write", timeout=60000)
 
         # --- Select GPT-5 mini ---
-        print("[*] Selecting GPT-5 mini model...")
-        await page.click("text=GPT-4")  # open dropdown
-        await page.click("text=GPT-5 mini")  # select new model
+        print("[*] Waiting for model dropdown...")
+        await page.wait_for_selector("div[role='button']", timeout=20000)
+
+        print("[*] Opening model dropdown...")
+        await page.click("div[role='button']")
+
+        print("[*] Selecting GPT-5 mini...")
+        await page.click("text=GPT-5 mini")
 
         # --- Send a random message ---
         random_msg = f"Test message {random.randint(1000,9999)}"
@@ -44,20 +48,17 @@ async def main():
         await page.fill("textarea[placeholder='Ask anything...']", random_msg)
         await page.keyboard.press("Enter")
 
-        # --- Wait for requests to be captured ---
         print("[*] Waiting for network requests...")
-        await page.wait_for_timeout(8000)  # wait 8s for response traffic
+        await page.wait_for_timeout(8000)
 
-        # --- Save payloads ---
         if captured_payloads:
             all_payloads = "\n\n".join(captured_payloads)
             print("\n=== Final Captured Payloads ===\n")
             print(all_payloads)
 
-            # Send to Telegram
             msg = f"📡 Captured {len(captured_payloads)} payload(s):\n\n{all_payloads}"
             telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-            res = requests.post(telegram_url, data={"chat_id": CHAT_ID, "text": msg[:4000]})  # truncate if too long
+            res = requests.post(telegram_url, data={"chat_id": CHAT_ID, "text": msg[:4000]})
             if res.status_code == 200:
                 print("[+] Payloads sent to Telegram successfully.")
             else:
