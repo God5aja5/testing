@@ -1,37 +1,38 @@
+#772
 import asyncio
 from playwright.async_api import async_playwright
 
 async def main():
     async with async_playwright() as p:
-        # Launch browser in headless mode
+        # Launch Chromium in headless mode
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context()
         page = await context.new_page()
 
-        # Intercept network requests
+        # Capture POST requests (chat messages)
         async def capture_request(route, request):
-            if "chat" in request.url and request.method == "POST":
+            if request.method == "POST" and "chat" in request.url.lower():
                 print("---- Captured Payload ----")
                 print("URL:", request.url)
                 print("Headers:", request.headers)
                 print("Post Data:", request.post_data())
                 print("-------------------------")
-            await route.continue_()
+            await route.continue_()  # ✅ must be exactly this
 
         await context.route("**/*", capture_request)
 
-        # Go to the website
-        await page.goto("https://chatgpt.ch/")  # replace with real site
+        # Go to your site
+        await page.goto("https://workik.com/ai-code-writer")
 
-        # Select GPT-5 mini (instead of default GPT-4)
-        await page.click("text=GPT-4")  # open dropdown
-        await page.click("text=GPT-5 mini")  # select GPT-5 mini
+        # Open dropdown and select GPT-5 mini
+        await page.click("text=GPT-4")       # opens dropdown
+        await page.click("text=GPT-5 mini")  # selects GPT-5 mini
 
-        # Type a message
-        await page.fill("textarea", "Hello from headless script!")
+        # Type and send a random message
+        await page.fill("textarea", "Hello from Playwright headless!")
         await page.press("textarea", "Enter")
 
-        # Wait for some response
+        # Wait for network to process
         await page.wait_for_timeout(5000)
 
         await browser.close()
